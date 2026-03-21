@@ -31,7 +31,56 @@ body{
 }
 @media(max-width:768px){body{cursor:auto}}
 
-/* ─── CURSOR ─── */
+/* ─── AUTH OVERLAY ─── */
+#auth-overlay{
+  display:none;position:fixed;inset:0;z-index:9999;
+  background:var(--bg);
+  align-items:center;justify-content:center;
+  flex-direction:column;
+}
+#auth-overlay.flex{display:flex}
+#auth-box{
+  background:var(--card);border:1px solid var(--border2);
+  border-radius:16px;padding:40px 32px 32px;
+  width:100%;max-width:400px;
+  box-shadow:0 0 80px #00d4ff18;
+  animation:popIn .25s ease;
+}
+.auth-logo{
+  font-family:var(--display);font-size:24px;font-weight:800;
+  letter-spacing:4px;text-align:center;margin-bottom:6px;
+  color:var(--text);
+}
+.auth-logo span{color:var(--neon);text-shadow:var(--glow)}
+.auth-title{
+  font-family:var(--display);font-size:16px;color:var(--muted);
+  text-align:center;letter-spacing:3px;margin-bottom:24px;
+  text-transform:uppercase;
+}
+.auth-field{margin-bottom:16px}
+.auth-field label{
+  display:block;font-size:11px;letter-spacing:2px;
+  color:var(--neon);margin-bottom:8px;text-transform:uppercase;
+}
+.auth-field label small{color:var(--muted);text-transform:none;letter-spacing:1px}
+.auth-switch{
+  text-align:center;margin-top:16px;
+  font-size:13px;color:var(--muted);
+}
+.auth-switch a{color:var(--neon);cursor:pointer;text-decoration:underline}
+
+/* ─── NAV USERNAME ─── */
+.nav-username{
+  font-size:12px;color:var(--neon);
+  letter-spacing:1px;padding:0 8px;
+}
+
+/* ─── OWNER BADGE ─── */
+.owner-badge{
+  background:#00d4ff18;border:1px solid var(--neon);
+  color:var(--neon);font-size:10px;border-radius:10px;
+  padding:2px 10px;letter-spacing:1px;
+}
 #cur-dot,#cur-ring{
   position:fixed;pointer-events:none;z-index:9999;
   border-radius:50%;transform:translate(-50%,-50%);
