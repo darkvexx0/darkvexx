@@ -46,8 +46,8 @@ async function supaUpsert(table, body) {
 }
 
 // ── CONSTANTS ──
-const ADMIN_USER = 'dakvexx';
-const ADMIN_PASS = 'yusuf2313';
+const ADMIN_USER = 'xleyz';
+const ADMIN_PASS = 'xleyz123';
 const BAN_MS     = 5 * 60 * 1000;
 const COOL_MS    = 3000;
 
