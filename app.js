@@ -5,43 +5,33 @@
 const SUPA_URL = 'https://bgjijdapgmzjlczyjszd.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJnamlqZGFwZ216amxjenlqc3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMTY3NDYsImV4cCI6MjA4OTU5Mjc0Nn0.XCGYtyIEabVvpDwYlox_lDYx3TMevnLN5q0wQ097p4E';
 
-// ── Supabase API yardımcısı ──
+// ── Supabase API ──
 async function supa(method, table, opts = {}) {
   const { filter, body, order, limit } = opts;
   let url = `${SUPA_URL}/rest/v1/${table}?`;
-  if (filter)  url += filter + '&';
-  if (order)   url += `order=${order}&`;
-  if (limit)   url += `limit=${limit}&`;
-
-  const headers = {
-    'apikey': SUPA_KEY,
-    'Authorization': 'Bearer ' + SUPA_KEY,
-    'Content-Type': 'application/json',
-    'Prefer': method === 'POST' ? 'return=representation' : 'return=representation',
-  };
-
+  if (filter) url += filter + '&';
+  if (order)  url += `order=${order}&`;
+  if (limit)  url += `limit=${limit}&`;
   const res = await fetch(url, {
     method,
-    headers,
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error('Supabase hata:', err);
-    return null;
-  }
-  const text = await res.text();
-  try { return text ? JSON.parse(text) : []; } catch { return []; }
+  if (!res.ok) { console.error('Supa err:', await res.text()); return null; }
+  const t = await res.text();
+  try { return t ? JSON.parse(t) : []; } catch { return []; }
 }
-
-async function supaGet(table, opts = {})         { return await supa('GET',    table, opts) || []; }
-async function supaPost(table, body)              { return await supa('POST',   table, { body }); }
-async function supaPatch(table, filter, body)     { return await supa('PATCH',  table, { filter, body }); }
-async function supaDelete(table, filter)          { return await supa('DELETE', table, { filter }); }
+async function supaGet(table, opts={})      { return await supa('GET',    table, opts) || []; }
+async function supaPost(table, body)        { return await supa('POST',   table, { body }); }
+async function supaPatch(table, filter, body){ return await supa('PATCH', table, { filter, body }); }
+async function supaDelete(table, filter)    { return await supa('DELETE', table, { filter }); }
 async function supaUpsert(table, body) {
-  const url = `${SUPA_URL}/rest/v1/${table}`;
-  const res = await fetch(url, {
+  const res = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
     method: 'POST',
     headers: {
       'apikey': SUPA_KEY,
@@ -51,8 +41,8 @@ async function supaUpsert(table, body) {
     },
     body: JSON.stringify(body),
   });
-  const text = await res.text();
-  try { return text ? JSON.parse(text) : []; } catch { return []; }
+  const t = await res.text();
+  try { return t ? JSON.parse(t) : []; } catch { return []; }
 }
 
 // ── CONSTANTS ──
@@ -87,7 +77,7 @@ const BAD = [
 
 // ── STATE ──
 let isAdmin      = false;
-let chatUser     = null;
+let currentUser  = null; // {username}
 let pageStack    = [];
 let curPage      = 'home';
 let activeFilter = 'all';
@@ -100,11 +90,240 @@ window.addEventListener('DOMContentLoaded', () => {
   buildCatGrid();
   buildFilterBar();
   restoreSession();
+
+  // Giriş yapılmamışsa giriş ekranını göster
+  if (!currentUser) {
+    showAuthScreen();
+  } else {
+    hideAuthScreen();
+    updateNavUserArea();
+    renderChannels();
+    initChat();
+    goTo('home', false);
+  }
+});
+
+// ═══════════════ AUTH SCREEN (zorunlu giriş) ═══════════════
+function showAuthScreen() {
+  // Tüm sayfaları gizle
+  document.querySelectorAll('.pg').forEach(p => p.classList.remove('active'));
+  document.getElementById('back-btn').classList.remove('show');
+
+  const overlay = document.getElementById('auth-overlay');
+  overlay.style.display = 'flex';
+  overlay.style.flexDirection = 'column';
+  showAuthForm('login');
+}
+
+function hideAuthScreen() {
+  document.getElementById('auth-overlay').style.display = 'none';
+}
+
+function showAuthForm(type) {
+  const box = document.getElementById('auth-box');
+
+  if (type === 'login') {
+    box.innerHTML = `
+      <div class="auth-logo">DARK<span>VEXX</span></div>
+      <div class="auth-title">Giriş Yap</div>
+      <div class="auth-field">
+        <label>Kullanıcı Adı</label>
+        <input type="text" id="a-uname" placeholder="kullanıcı adın" autocomplete="off"/>
+      </div>
+      <div class="auth-field">
+        <label>Şifre</label>
+        <input type="password" id="a-upass" placeholder="şifren" onkeydown="if(event.key==='Enter')authLogin()"/>
+      </div>
+      <div class="msg-box err" id="a-err" style="display:none"></div>
+      <button class="btn-neon w100" onclick="authLogin()">Giriş Yap</button>
+      <div class="auth-switch">Hesabın yok mu? <a onclick="showAuthForm('register')">Kayıt Ol</a></div>
+    `;
+  } else {
+    box.innerHTML = `
+      <div class="auth-logo">DARK<span>VEXX</span></div>
+      <div class="auth-title">Kayıt Ol</div>
+      <div class="auth-field">
+        <label>Kullanıcı Adı <small>(3-18 karakter)</small></label>
+        <input type="text" id="a-rname" placeholder="kullanıcı adı seç" maxlength="18" autocomplete="off"/>
+      </div>
+      <div class="auth-field">
+        <label>Şifre <small>(min 4 karakter)</small></label>
+        <input type="password" id="a-rpass" placeholder="şifre belirle" maxlength="30"/>
+      </div>
+      <div class="auth-field">
+        <label>Şifre Tekrar</label>
+        <input type="password" id="a-rpass2" placeholder="şifreyi tekrar gir" maxlength="30" onkeydown="if(event.key==='Enter')authRegister()"/>
+      </div>
+      <div class="msg-box err" id="a-err" style="display:none"></div>
+      <button class="btn-neon w100" onclick="authRegister()">Kayıt Ol</button>
+      <div class="auth-switch">Zaten hesabın var mı? <a onclick="showAuthForm('login')">Giriş Yap</a></div>
+    `;
+  }
+}
+
+async function authLogin() {
+  const uname = aval('a-uname'), pass = aval('a-upass');
+  if (!uname || !pass) { aErr('Tüm alanları doldurun.'); return; }
+
+  // Admin kontrolü
+  if (uname === ADMIN_USER && pass === ADMIN_PASS) {
+    isAdmin = true;
+    currentUser = { username: ADMIN_USER };
+    sessionStorage.setItem('dv_admin', '1');
+    sessionStorage.setItem('dv_user', JSON.stringify(currentUser));
+    hideAuthScreen();
+    updateNavUserArea();
+    renderChannels();
+    initChat();
+    goTo('home', false);
+    return;
+  }
+
+  const rows = await supaGet('users', {
+    filter: `username=eq.${encodeURIComponent(uname)}&password=eq.${encodeURIComponent(pass)}`
+  });
+  if (!rows || !rows.length) { aErr('Kullanıcı adı veya şifre hatalı.'); return; }
+
+  currentUser = { username: rows[0].username };
+  sessionStorage.setItem('dv_user', JSON.stringify(currentUser));
+  hideAuthScreen();
   updateNavUserArea();
   renderChannels();
   initChat();
   goTo('home', false);
-});
+}
+
+async function authRegister() {
+  const uname = aval('a-rname'), pass = aval('a-rpass'), pass2 = aval('a-rpass2');
+  if (uname.length < 3)  { aErr('Kullanıcı adı en az 3 karakter olmalı.'); return; }
+  if (pass.length < 4)   { aErr('Şifre en az 4 karakter olmalı.'); return; }
+  if (pass !== pass2)    { aErr('Şifreler eşleşmiyor.'); return; }
+
+  // Admin adı kullanılamaz
+  if (uname.toLowerCase() === ADMIN_USER) { aErr('Bu kullanıcı adı kullanılamaz.'); return; }
+
+  const existing = await supaGet('users', { filter: `username=eq.${encodeURIComponent(uname)}` });
+  if (existing && existing.length) { aErr('Bu kullanıcı adı zaten alınmış.'); return; }
+
+  const result = await supaPost('users', { username: uname, password: pass });
+  if (!result) { aErr('Kayıt başarısız, tekrar dene.'); return; }
+
+  currentUser = { username: uname };
+  sessionStorage.setItem('dv_user', JSON.stringify(currentUser));
+  hideAuthScreen();
+  updateNavUserArea();
+  renderChannels();
+  initChat();
+  goTo('home', false);
+}
+
+function aErr(msg) {
+  const e = document.getElementById('a-err');
+  if (e) { e.textContent = msg; e.style.display = 'block'; }
+}
+function aval(id) { const e = document.getElementById(id); return e ? e.value.trim() : ''; }
+
+// ═══════════════ SESSION ═══════════════
+function restoreSession() {
+  if (sessionStorage.getItem('dv_admin') === '1') isAdmin = true;
+  const u = sessionStorage.getItem('dv_user');
+  if (u) { try { currentUser = JSON.parse(u); } catch(_){} }
+}
+
+// ═══════════════ NAV ═══════════════
+function updateNavUserArea() {
+  const area = document.getElementById('nav-user-area');
+  if (!area) return;
+  if (isAdmin) {
+    area.innerHTML = `
+      <span class="nav-username">👑 ${esc(currentUser.username)}</span>
+      <button class="nb active-nb" onclick="goTo('admin')">Admin</button>
+      <button class="nb" onclick="doLogout()">Çıkış</button>`;
+  } else if (currentUser) {
+    area.innerHTML = `
+      <span class="nav-username">👤 ${esc(currentUser.username)}</span>
+      <button class="nb" onclick="doLogout()">Çıkış</button>`;
+  }
+}
+
+function doLogout() {
+  currentUser = null;
+  isAdmin = false;
+  sessionStorage.removeItem('dv_user');
+  sessionStorage.removeItem('dv_admin');
+  showAuthScreen();
+}
+
+// ═══════════════ NAVIGATION ═══════════════
+function goTo(name, push=true) {
+  if (!currentUser) { showAuthScreen(); return; }
+  if (name === 'admin' && !isAdmin) return;
+  document.querySelectorAll('.pg').forEach(p => p.classList.remove('active'));
+  const pg = document.getElementById('pg-'+name);
+  if (!pg) return;
+  pg.classList.add('active');
+  if (push && name !== curPage) pageStack.push(curPage);
+  curPage = name;
+  const bb = document.getElementById('back-btn');
+  bb.classList.toggle('show', pageStack.length > 0 && name !== 'home');
+  window.scrollTo({top:0, behavior:'smooth'});
+  if (name === 'channels') renderChannels();
+  if (name === 'admin')    renderAdmin();
+}
+
+function goBack() {
+  if (pageStack.length) goTo(pageStack.pop(), false);
+}
+
+// ═══════════════ MODAL (sadece admin login için) ═══════════════
+function openModal(type) {
+  document.getElementById('modal-bg').classList.add('open');
+  const body = document.getElementById('modal-body');
+  if (type === 'adminLogin') {
+    body.innerHTML = `
+      <div class="modal-title">ADMİN GİRİŞİ</div>
+      <div class="modal-field">
+        <label>Kullanıcı Adı</label>
+        <input type="text" id="m-auser" placeholder="kullanıcı adı" autocomplete="off"/>
+      </div>
+      <div class="modal-field">
+        <label>Şifre</label>
+        <input type="password" id="m-apass" placeholder="şifre" onkeydown="if(event.key==='Enter')submitAdminLogin()"/>
+      </div>
+      <div class="msg-box err" id="m-err" style="display:none"></div>
+      <button class="btn-neon w100" onclick="submitAdminLogin()">Giriş Yap</button>`;
+  }
+}
+
+function closeModal() {
+  document.getElementById('modal-bg').classList.remove('open');
+}
+
+function mErr(msg) {
+  const e = document.getElementById('m-err');
+  if (e) { e.textContent = msg; e.style.display = 'block'; }
+}
+
+function submitAdminLogin() {
+  const u = val('m-auser'), p = val('m-apass');
+  if (u === ADMIN_USER && p === ADMIN_PASS) {
+    isAdmin = true;
+    sessionStorage.setItem('dv_admin', '1');
+    closeModal();
+    updateNavUserArea();
+    goTo('admin');
+  } else {
+    mErr('Hatalı kullanıcı adı veya şifre.');
+  }
+}
+
+function doAdminLogout() {
+  isAdmin = false;
+  currentUser = null;
+  sessionStorage.removeItem('dv_admin');
+  sessionStorage.removeItem('dv_user');
+  showAuthScreen();
+}
 
 // ═══════════════ CURSOR ═══════════════
 function initCursor() {
@@ -145,173 +364,6 @@ function initParticles() {
   }
 }
 
-// ═══════════════ NAVIGATION ═══════════════
-function goTo(name, push=true) {
-  if (name==='admin' && !isAdmin) { openModal('adminLogin'); return; }
-  document.querySelectorAll('.pg').forEach(p => p.classList.remove('active'));
-  const pg = document.getElementById('pg-'+name);
-  if (!pg) return;
-  pg.classList.add('active');
-  if (push && name!==curPage) pageStack.push(curPage);
-  curPage = name;
-  const bb = document.getElementById('back-btn');
-  bb.classList.toggle('show', pageStack.length>0 && name!=='home');
-  window.scrollTo({top:0, behavior:'smooth'});
-  if (name==='channels') renderChannels();
-  if (name==='admin')    renderAdmin();
-}
-
-function goBack() {
-  if (pageStack.length) goTo(pageStack.pop(), false);
-}
-
-// ═══════════════ SESSION ═══════════════
-function restoreSession() {
-  if (sessionStorage.getItem('dv_admin')==='1') isAdmin = true;
-  const u = sessionStorage.getItem('dv_user');
-  if (u) { try { chatUser = JSON.parse(u); } catch(_){} }
-}
-
-// ═══════════════ NAV ═══════════════
-function updateNavUserArea() {
-  const area = document.getElementById('nav-user-area');
-  if (isAdmin) {
-    area.innerHTML = `
-      <button class="nb active-nb" onclick="goTo('admin')">Admin</button>
-      <button class="nb" onclick="doAdminLogout()">Çıkış</button>`;
-  } else {
-    area.innerHTML = `<button class="nb" onclick="openModal('adminLogin')">Giriş</button>`;
-  }
-}
-
-// ═══════════════ MODAL ═══════════════
-function openModal(type) {
-  document.getElementById('modal-bg').classList.add('open');
-  const body = document.getElementById('modal-body');
-
-  if (type === 'adminLogin') {
-    body.innerHTML = `
-      <div class="modal-title">ADMİN GİRİŞİ</div>
-      <div class="modal-field">
-        <label>Kullanıcı Adı</label>
-        <input type="text" id="m-auser" placeholder="kullanıcı adı" autocomplete="off"/>
-      </div>
-      <div class="modal-field">
-        <label>Şifre</label>
-        <input type="password" id="m-apass" placeholder="şifre"
-          onkeydown="if(event.key==='Enter')submitAdminLogin()"/>
-      </div>
-      <div class="msg-box err" id="m-err" style="display:none"></div>
-      <button class="btn-neon w100" onclick="submitAdminLogin()">Giriş Yap</button>`;
-  }
-  else if (type === 'login') {
-    body.innerHTML = `
-      <div class="modal-title">GİRİŞ YAP</div>
-      <div class="modal-field">
-        <label>Kullanıcı Adı</label>
-        <input type="text" id="m-uname" placeholder="kullanıcı adın" autocomplete="off"/>
-      </div>
-      <div class="modal-field">
-        <label>Şifre</label>
-        <input type="password" id="m-upass" placeholder="şifren"
-          onkeydown="if(event.key==='Enter')submitLogin()"/>
-      </div>
-      <div class="msg-box err" id="m-err" style="display:none"></div>
-      <button class="btn-neon w100" onclick="submitLogin()">Giriş Yap</button>
-      <div class="modal-switch">Hesabın yok mu? <a onclick="openModal('register')">Kayıt Ol</a></div>`;
-  }
-  else if (type === 'register') {
-    body.innerHTML = `
-      <div class="modal-title">KAYIT OL</div>
-      <div class="modal-field">
-        <label>Kullanıcı Adı <small>(3–18 karakter)</small></label>
-        <input type="text" id="m-rname" placeholder="kullanıcı adı" maxlength="18" autocomplete="off"/>
-      </div>
-      <div class="modal-field">
-        <label>Şifre <small>(min 4 karakter)</small></label>
-        <input type="password" id="m-rpass" placeholder="şifre" maxlength="30"/>
-      </div>
-      <div class="modal-field">
-        <label>Şifre Tekrar</label>
-        <input type="password" id="m-rpass2" placeholder="şifre tekrar" maxlength="30"
-          onkeydown="if(event.key==='Enter')submitRegister()"/>
-      </div>
-      <div class="msg-box err" id="m-err" style="display:none"></div>
-      <button class="btn-neon w100" onclick="submitRegister()">Kayıt Ol</button>
-      <div class="modal-switch">Zaten hesabın var mı? <a onclick="openModal('login')">Giriş Yap</a></div>`;
-  }
-}
-
-function closeModal() {
-  document.getElementById('modal-bg').classList.remove('open');
-}
-
-function mErr(msg) {
-  const e = document.getElementById('m-err');
-  if (!e) return;
-  e.textContent = msg; e.style.display = 'block';
-}
-
-// ── Admin Login ──
-function submitAdminLogin() {
-  const u = val('m-auser'), p = val('m-apass');
-  if (u === ADMIN_USER && p === ADMIN_PASS) {
-    isAdmin = true;
-    sessionStorage.setItem('dv_admin','1');
-    closeModal();
-    updateNavUserArea();
-    goTo('admin');
-  } else {
-    mErr('Hatalı kullanıcı adı veya şifre.');
-  }
-}
-
-function doAdminLogout() {
-  isAdmin = false;
-  sessionStorage.removeItem('dv_admin');
-  updateNavUserArea();
-  goTo('home');
-}
-
-// ── User Login ──
-async function submitLogin() {
-  const uname = val('m-uname'), pass = val('m-upass');
-  if (!uname||!pass) { mErr('Tüm alanları doldurun.'); return; }
-
-  const rows = await supaGet('users', {
-    filter: `username=eq.${encodeURIComponent(uname)}&password=eq.${encodeURIComponent(pass)}`
-  });
-
-  if (!rows || !rows.length) { mErr('Kullanıcı adı veya şifre hatalı.'); return; }
-
-  chatUser = { username: rows[0].username };
-  sessionStorage.setItem('dv_user', JSON.stringify(chatUser));
-  closeModal();
-  updateChatUI();
-}
-
-// ── User Register ──
-async function submitRegister() {
-  const uname = val('m-rname'), pass = val('m-rpass'), pass2 = val('m-rpass2');
-  if (uname.length < 3)  { mErr('Kullanıcı adı en az 3 karakter olmalı.'); return; }
-  if (pass.length < 4)   { mErr('Şifre en az 4 karakter olmalı.'); return; }
-  if (pass !== pass2)    { mErr('Şifreler eşleşmiyor.'); return; }
-
-  // Kullanıcı adı var mı?
-  const existing = await supaGet('users', {
-    filter: `username=eq.${encodeURIComponent(uname)}`
-  });
-  if (existing && existing.length) { mErr('Bu kullanıcı adı alınmış.'); return; }
-
-  const result = await supaPost('users', { username: uname, password: pass });
-  if (!result) { mErr('Kayıt başarısız, tekrar dene.'); return; }
-
-  chatUser = { username: uname };
-  sessionStorage.setItem('dv_user', JSON.stringify(chatUser));
-  closeModal();
-  updateChatUI();
-}
-
 // ═══════════════ CATEGORIES ═══════════════
 function buildCatGrid() {
   const g = document.getElementById('cat-grid');
@@ -344,12 +396,12 @@ function buildFilterBar() {
   const bar = document.getElementById('filter-bar');
   if (!bar) return;
   const all = document.createElement('button');
-  all.className='flt on'; all.textContent='Tümü'; all.dataset.cat='all';
+  all.className='flt on'; all.textContent='Tümü';
   all.onclick = () => setFilter('all', all);
   bar.appendChild(all);
   CATS.forEach(c => {
     const b = document.createElement('button');
-    b.className='flt'; b.textContent=c.l; b.dataset.cat=c.id;
+    b.className='flt'; b.textContent=c.l;
     b.onclick = () => setFilter(c.id, b);
     bar.appendChild(b);
   });
@@ -364,19 +416,17 @@ function setFilter(cat, btn) {
 
 // ═══════════════ ADD CHANNEL ═══════════════
 async function addChannel() {
-  const url  = document.getElementById('inp-url').value.trim();
-  const cats = getSelCats();
+  if (!currentUser) { showAuthScreen(); return; }
+  const url   = document.getElementById('inp-url').value.trim();
+  const cats  = getSelCats();
   const errEl = document.getElementById('add-err');
   errEl.style.display = 'none';
 
-  if (!url)                        { showErr(errEl,'YouTube kanal linki girin.'); return; }
-  if (!url.includes('youtube.com')){ showErr(errEl,'Geçerli bir YouTube linki girin.'); return; }
-  if (!cats.length)                { showErr(errEl,'En az 1 kategori seç.'); return; }
+  if (!url)                         { showErr(errEl,'YouTube kanal linki girin.'); return; }
+  if (!url.includes('youtube.com')) { showErr(errEl,'Geçerli bir YouTube linki girin.'); return; }
+  if (!cats.length)                 { showErr(errEl,'En az 1 kategori seç.'); return; }
 
-  // Aynı URL var mı?
-  const existing = await supaGet('channels', {
-    filter: `url=eq.${encodeURIComponent(url)}`
-  });
+  const existing = await supaGet('channels', { filter: `url=eq.${encodeURIComponent(url)}` });
   if (existing && existing.length) { showErr(errEl,'Bu kanal zaten eklenmiş.'); return; }
 
   const btn = document.getElementById('add-btn');
@@ -385,16 +435,12 @@ async function addChannel() {
   const info = await getYTInfo(url);
 
   const result = await supaPost('channels', {
-    url,
-    name: info.name,
-    logo: info.logo,
-    categories: cats,
-    likes: 0,
-    dislikes: 0,
+    url, name: info.name, logo: info.logo,
+    categories: cats, likes: 0, dislikes: 0,
+    added_by: currentUser.username,
   });
 
   btn.disabled = false; btn.textContent = '🚀 Kanalı Ekle';
-
   if (!result) { showErr(errEl,'Kanal eklenirken hata oluştu.'); return; }
 
   document.getElementById('inp-url').value = '';
@@ -437,14 +483,12 @@ async function renderChannels() {
   grid.innerHTML = '<div class="empty">Yükleniyor...</div>';
 
   let filter = '';
-  if (activeFilter !== 'all') {
-    filter = `categories=cs.{"${activeFilter}"}`;
-  }
+  if (activeFilter !== 'all') filter = `categories=cs.{"${activeFilter}"}`;
 
-  const chs = await supaGet('channels', {
-    filter,
-    order: 'likes.desc',
-  });
+  const [chs, myVoteRows] = await Promise.all([
+    supaGet('channels', { filter, order: 'likes.desc' }),
+    currentUser ? supaGet('votes', { filter: `username=eq.${encodeURIComponent(currentUser.username)}` }) : Promise.resolve([]),
+  ]);
 
   grid.innerHTML = '';
   if (!chs || !chs.length) {
@@ -452,16 +496,18 @@ async function renderChannels() {
     return;
   }
 
-  // Kendi oyunu localStorage'dan al (session bazlı)
-  const myVotes = JSON.parse(localStorage.getItem('dv_myvotes') || '{}');
+  // Kullanıcının oylarını map'e al
+  const myVoteMap = {};
+  (myVoteRows||[]).forEach(v => myVoteMap[v.channel_id] = v.vote_type);
 
-  // En yüksek skoru bul
   const sorted = [...chs].sort((a,b) => (b.likes-b.dislikes)-(a.likes-a.dislikes));
   const topId  = sorted[0]?.id;
 
   sorted.forEach(ch => {
-    const isTop = ch.id === topId && (ch.likes - ch.dislikes) > 0;
-    const uv    = myVotes[ch.id] || null;
+    const isTop   = ch.id === topId && (ch.likes - ch.dislikes) > 0;
+    const uv      = myVoteMap[ch.id] || null;
+    const isOwner = currentUser && ch.added_by === currentUser.username;
+    const canDel  = isAdmin || isOwner;
 
     const card = document.createElement('div');
     card.className = 'ch-card' + (isTop ? ' top' : '');
@@ -471,19 +517,23 @@ async function renderChannels() {
            onerror="this.outerHTML='<div class=\\'ch-logo-ph\\'>📺</div>'">`
       : `<div class="ch-logo-ph">📺</div>`;
 
-    const catHtml = (ch.categories || []).map(id => {
+    const catHtml = (ch.categories||[]).map(id => {
       const c = CATS.find(x => x.id===id);
       return c ? `<span class="ch-cat">${c.l}</span>` : '';
     }).join('');
 
-    const delBtn = isAdmin
-      ? `<button class="del-btn" onclick="adminDelChannel('${ch.id}')">🗑 Sil</button>`
+    const ownerBadge = isOwner && !isAdmin
+      ? `<span class="owner-badge">Senin Kanalin</span>` : '';
+
+    const delBtn = canDel
+      ? `<button class="del-btn" onclick="deleteChannel('${ch.id}','${esc(ch.added_by||'')}')">🗑 Sil</button>`
       : '';
 
     card.innerHTML = `
       ${isTop ? '<div class="top-badge">🏆 TOP</div>' : ''}
       ${logoHtml}
       <div class="ch-name">${esc(ch.name)}</div>
+      ${ownerBadge}
       <div class="ch-cats">${catHtml}</div>
       <a class="ch-link" href="${esc(ch.url)}" target="_blank" rel="noopener">🔗 Kanalı Ziyaret Et</a>
       <div class="vote-row">
@@ -500,12 +550,20 @@ async function renderChannels() {
   });
 }
 
-async function vote(id, type, btnEl) {
-  const myVotes = JSON.parse(localStorage.getItem('dv_myvotes') || '{}');
-  const prev = myVotes[id] || null;
+// ═══════════════ VOTE ═══════════════
+async function vote(channelId, type, btnEl) {
+  if (!currentUser) { showAuthScreen(); return; }
 
-  // Mevcut kanal verisini al
-  const rows = await supaGet('channels', { filter: `id=eq.${id}` });
+  const username = currentUser.username;
+
+  // Mevcut oyu kontrol et
+  const existingVotes = await supaGet('votes', {
+    filter: `channel_id=eq.${channelId}&username=eq.${encodeURIComponent(username)}`
+  });
+  const prev = existingVotes && existingVotes.length ? existingVotes[0].vote_type : null;
+
+  // Kanal verisini al
+  const rows = await supaGet('channels', { filter: `id=eq.${channelId}` });
   if (!rows || !rows.length) return;
   const ch = rows[0];
 
@@ -513,34 +571,40 @@ async function vote(id, type, btnEl) {
   let newDislikes = ch.dislikes;
 
   if (prev === type) {
-    // aynı oya tekrar basınca geri al
-    if (type==='like')    newLikes--;
-    else                  newDislikes--;
-    delete myVotes[id];
+    // Aynı oy → geri al
+    if (type==='like') newLikes--; else newDislikes--;
+    await supaDelete('votes', `channel_id=eq.${channelId}&username=eq.${encodeURIComponent(username)}`);
   } else {
     if (prev==='like')    newLikes--;
     if (prev==='dislike') newDislikes--;
-    if (type==='like')    newLikes++;
-    else                  newDislikes++;
-    myVotes[id] = type;
+    if (type==='like')    newLikes++; else newDislikes++;
+    await supaUpsert('votes', { channel_id: channelId, username, vote_type: type });
   }
 
-  localStorage.setItem('dv_myvotes', JSON.stringify(myVotes));
+  await supaPatch('channels', `id=eq.${channelId}`, { likes: newLikes, dislikes: newDislikes });
 
-  await supaPatch('channels', `id=eq.${id}`, { likes: newLikes, dislikes: newDislikes });
-
-  // Sadece sayıları güncelle, sayfayı yeniden yükleme
-  const lkEl = document.getElementById('lk-'+id);
-  const dkEl = document.getElementById('dk-'+id);
+  // UI güncelle
+  const lkEl = document.getElementById('lk-'+channelId);
+  const dkEl = document.getElementById('dk-'+channelId);
   if (lkEl) lkEl.textContent = newLikes;
   if (dkEl) dkEl.textContent = newDislikes;
 
-  // Buton durumlarını güncelle
   const card = btnEl.closest('.ch-card');
   if (card) {
     card.querySelectorAll('.vbtn').forEach(b => b.classList.remove('on'));
-    if (myVotes[id]) btnEl.classList.add('on');
+    if (prev !== type) btnEl.classList.add('on');
   }
+}
+
+// ═══════════════ DELETE CHANNEL ═══════════════
+async function deleteChannel(id, addedBy) {
+  if (!currentUser) return;
+  // Sadece admin veya kanalı ekleyen silebilir
+  if (!isAdmin && currentUser.username !== addedBy) return;
+  if (!confirm('Bu kanalı silmek istediğinden emin misin?')) return;
+  await supaDelete('channels', `id=eq.${id}`);
+  renderChannels();
+  if (curPage === 'admin') renderAdmin();
 }
 
 // ═══════════════ ADMIN ═══════════════
@@ -564,7 +628,6 @@ async function renderAdmin() {
     <div class="stat-box"><div class="sn">${activeBans.length}</div><div class="sl">Yasaklı</div></div>
   `;
 
-  // Kanallar
   const cl = document.getElementById('admin-ch-list');
   cl.innerHTML = (chs||[]).length ? '' : '<div class="no-data">Kanal yok.</div>';
   (chs||[]).forEach(ch => {
@@ -574,14 +637,14 @@ async function renderAdmin() {
       <div class="ar-info">
         <div class="ar-name">${esc(ch.name)}</div>
         <div class="ar-url">${esc(ch.url)}</div>
+        <div class="ar-url" style="color:var(--neon);margin-top:2px">Ekleyen: ${esc(ch.added_by||'?')}</div>
       </div>
       <span style="font-size:12px;color:var(--muted)">👍${ch.likes} 👎${ch.dislikes}</span>
-      <button class="adel" onclick="adminDelChannel('${ch.id}')">🗑 Sil</button>
+      <button class="adel" onclick="deleteChannel('${ch.id}','${esc(ch.added_by||'')}')">🗑 Sil</button>
     `;
     cl.appendChild(r);
   });
 
-  // Yasaklar
   const bl = document.getElementById('admin-ban-list');
   bl.innerHTML = activeBans.length ? '' : '<div class="no-data">Aktif yasak yok.</div>';
   activeBans.forEach(ban => {
@@ -597,13 +660,6 @@ async function renderAdmin() {
   });
 }
 
-async function adminDelChannel(id) {
-  if (!isAdmin) return;
-  await supaDelete('channels', `id=eq.${id}`);
-  renderAdmin();
-  if (curPage === 'channels') renderChannels();
-}
-
 async function adminUnban(nick) {
   if (!isAdmin) return;
   await supaDelete('bans', `nick=eq.${encodeURIComponent(nick)}`);
@@ -615,7 +671,7 @@ function initChat() {
   updateChatUI();
   renderMsgs();
   setInterval(() => {
-    if (chatUser && !document.getElementById('chat-body').classList.contains('closed')) {
+    if (currentUser && !document.getElementById('chat-body').classList.contains('closed')) {
       renderMsgs();
     }
   }, 3000);
@@ -629,38 +685,31 @@ function toggleChat() {
 }
 
 function updateChatUI() {
-  const wall  = document.getElementById('chat-auth-wall');
   const inner = document.getElementById('chat-inner');
   const uname = document.getElementById('chat-uname');
-  if (!wall) return;
-  if (chatUser) {
-    wall.style.display = 'none';
+  const wall  = document.getElementById('chat-auth-wall');
+  if (!inner) return;
+  if (currentUser) {
+    if (wall) wall.style.display = 'none';
     inner.style.display = 'flex';
-    uname.textContent = '👤 ' + chatUser.username;
+    if (uname) uname.textContent = '👤 ' + currentUser.username;
     renderMsgs();
   } else {
-    wall.style.display = 'flex';
+    if (wall) wall.style.display = 'flex';
     inner.style.display = 'none';
   }
 }
 
-function chatLogout() {
-  chatUser = null;
-  sessionStorage.removeItem('dv_user');
-  updateChatUI();
-}
-
 async function sendMsg() {
-  if (!chatUser) return;
+  if (!currentUser) return;
   const inp  = document.getElementById('chat-inp');
   const st   = document.getElementById('chat-status');
   const text = inp.value.trim();
   if (!text) return;
 
   const now  = Date.now();
-  const nick = chatUser.username;
+  const nick = currentUser.username;
 
-  // Ban kontrolü
   const banRows = await supaGet('bans', { filter: `nick=eq.${encodeURIComponent(nick)}` });
   if (banRows && banRows.length && banRows[0].until_ts > now) {
     const left = Math.ceil((banRows[0].until_ts - now) / 60000);
@@ -668,14 +717,12 @@ async function sendMsg() {
     inp.value = ''; return;
   }
 
-  // Cooldown
   if (now - lastMsg < COOL_MS) {
     const w = Math.ceil((COOL_MS-(now-lastMsg))/1000);
     st.textContent = `⏳ ${w} saniye bekle.`;
     return;
   }
 
-  // Küfür
   if (hasBad(text)) {
     await supaUpsert('bans', { nick, until_ts: now + BAN_MS });
     st.textContent = '🚫 Küfür! 5 dakika yasaklandın.';
@@ -693,26 +740,19 @@ async function renderMsgs() {
   const c = document.getElementById('chat-msgs');
   if (!c) return;
   const atBot = c.scrollHeight - c.scrollTop <= c.clientHeight + 40;
-
-  const msgs = await supaGet('messages', {
-    order: 'created_at.asc',
-    limit: 60,
-  });
-
+  const msgs = await supaGet('messages', { order: 'created_at.asc', limit: 60 });
   c.innerHTML = '';
   if (!msgs || !msgs.length) {
     c.innerHTML = '<div class="cmsg sys"><div class="cmsg-text">Sohbet başlamayı bekliyor...</div></div>';
     return;
   }
-
   msgs.forEach(m => {
-    const el  = document.createElement('div');
-    const me  = chatUser && m.nick === chatUser.username;
+    const el = document.createElement('div');
+    const me = currentUser && m.nick === currentUser.username;
     el.className = 'cmsg' + (me ? ' me' : '');
     el.innerHTML = `<div class="cmsg-nick">${esc(m.nick)}</div><div class="cmsg-text">${esc(m.text)}</div>`;
     c.appendChild(el);
   });
-
   if (atBot) c.scrollTop = c.scrollHeight;
 }
 
@@ -722,7 +762,7 @@ function hasBad(text) {
 }
 
 // ═══════════════ HELPERS ═══════════════
-function val(id) { const e=document.getElementById(id); return e?e.value.trim():''; }
+function val(id)  { const e=document.getElementById(id); return e?e.value.trim():''; }
 function showErr(el,msg) { el.textContent=msg; el.style.display='block'; }
 function esc(s) {
   return String(s)
