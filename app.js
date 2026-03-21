@@ -165,7 +165,7 @@ async function authLogin() {
   const uname = aval('a-uname'), pass = aval('a-upass');
   if (!uname || !pass) { aErr('Tüm alanları doldurun.'); return; }
 
-  // Admin kontrolü
+  // Admin kontrolü — önce admin mi diye bak
   if (uname === ADMIN_USER && pass === ADMIN_PASS) {
     isAdmin = true;
     currentUser = { username: ADMIN_USER };
@@ -175,7 +175,7 @@ async function authLogin() {
     updateNavUserArea();
     renderChannels();
     initChat();
-    goTo('home', false);
+    goTo('admin', false);
     return;
   }
 
@@ -597,17 +597,44 @@ async function vote(channelId, type, btnEl) {
 }
 
 // ═══════════════ DELETE CHANNEL ═══════════════
+async function adminForceDelete(id) {
+  if (!isAdmin) return;
+  if (!confirm('Bu kanalı silmek istediğinden emin misin?')) return;
+  await supaDelete('channels', `id=eq.${id}`);
+  await supaDelete('votes', `channel_id=eq.${id}`);
+  renderAdmin();
+  if (curPage === 'channels') renderChannels();
+}
+
 async function deleteChannel(id, addedBy) {
   if (!currentUser) return;
-  // Sadece admin veya kanalı ekleyen silebilir
   if (!isAdmin && currentUser.username !== addedBy) return;
   if (!confirm('Bu kanalı silmek istediğinden emin misin?')) return;
   await supaDelete('channels', `id=eq.${id}`);
+  await supaDelete('votes', `channel_id=eq.${id}`);
   renderChannels();
   if (curPage === 'admin') renderAdmin();
 }
 
 // ═══════════════ ADMIN ═══════════════
+async function resetAll() {
+  if (!isAdmin) return;
+  if (!confirm('⚠️ DİKKAT! Tüm kanallar, beğeniler ve mesajlar silinecek. Emin misin?')) return;
+  if (!confirm('Son kez onaylıyor musun? Bu işlem geri alınamaz!')) return;
+
+  // Hepsini sil
+  await Promise.all([
+    supaDelete('channels', 'id=neq.00000000-0000-0000-0000-000000000000'),
+    supaDelete('votes',    'channel_id=neq.00000000-0000-0000-0000-000000000000'),
+    supaDelete('messages', 'id=neq.00000000-0000-0000-0000-000000000000'),
+    supaDelete('bans',     'nick=neq.__dummy__'),
+  ]);
+
+  alert('✅ Site sıfırlandı!');
+  renderAdmin();
+  if (curPage === 'channels') renderChannels();
+}
+
 async function renderAdmin() {
   if (!isAdmin) return;
 
@@ -626,6 +653,10 @@ async function renderAdmin() {
     <div class="stat-box"><div class="sn">${(users||[]).length}</div><div class="sl">Kullanıcı</div></div>
     <div class="stat-box"><div class="sn">${(msgs||[]).length}</div><div class="sl">Mesaj</div></div>
     <div class="stat-box"><div class="sn">${activeBans.length}</div><div class="sl">Yasaklı</div></div>
+    <div class="stat-box" style="border-color:var(--danger);cursor:pointer" onclick="resetAll()">
+      <div class="sn" style="color:var(--danger);font-size:22px">🗑</div>
+      <div class="sl" style="color:var(--danger)">SİTEYİ SIFIRLA</div>
+    </div>
   `;
 
   const cl = document.getElementById('admin-ch-list');
@@ -640,7 +671,7 @@ async function renderAdmin() {
         <div class="ar-url" style="color:var(--neon);margin-top:2px">Ekleyen: ${esc(ch.added_by||'?')}</div>
       </div>
       <span style="font-size:12px;color:var(--muted)">👍${ch.likes} 👎${ch.dislikes}</span>
-      <button class="adel" onclick="deleteChannel('${ch.id}','${esc(ch.added_by||'')}')">🗑 Sil</button>
+      <button class="adel" onclick="adminForceDelete('${ch.id}')">🗑 Sil</button>
     `;
     cl.appendChild(r);
   });
