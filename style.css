@@ -37,7 +37,12 @@ body{
   background:var(--bg);
   align-items:center;justify-content:center;
   flex-direction:column;
+  cursor:auto;
 }
+#auth-overlay *{cursor:auto}
+#auth-overlay input{cursor:text}
+#auth-overlay a{cursor:pointer}
+#auth-overlay button{cursor:pointer}
 #auth-overlay.flex{display:flex}
 #auth-box{
   background:var(--card);border:1px solid var(--border2);
