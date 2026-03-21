@@ -165,8 +165,8 @@ async function authLogin() {
   const uname = aval('a-uname'), pass = aval('a-upass');
   if (!uname || !pass) { aErr('Tüm alanları doldurun.'); return; }
 
-  // Admin kontrolü — önce admin mi diye bak
-  if (uname === ADMIN_USER && pass === ADMIN_PASS) {
+  // ── Admin kontrolü (Supabase'e gitmez, direkt karşılaştırır) ──
+  if (uname.trim() === ADMIN_USER && pass.trim() === ADMIN_PASS) {
     isAdmin = true;
     currentUser = { username: ADMIN_USER };
     sessionStorage.setItem('dv_admin', '1');
@@ -179,9 +179,16 @@ async function authLogin() {
     return;
   }
 
-  const rows = await supaGet('users', {
-    filter: `username=eq.${encodeURIComponent(uname)}&password=eq.${encodeURIComponent(pass)}`
-  });
+  // ── Normal kullanıcı kontrolü ──
+  let rows = null;
+  try {
+    rows = await supaGet('users', {
+      filter: `username=eq.${encodeURIComponent(uname)}&password=eq.${encodeURIComponent(pass)}`
+    });
+  } catch(e) {
+    aErr('Bağlantı hatası, tekrar dene.'); return;
+  }
+
   if (!rows || !rows.length) { aErr('Kullanıcı adı veya şifre hatalı.'); return; }
 
   currentUser = { username: rows[0].username };
