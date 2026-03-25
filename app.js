@@ -2,8 +2,8 @@
 //  DARK VEXX — app.js (Supabase)
 // ═══════════════════════════════════════
 
-const SUPA_URL = 'https://bgjijdapgmzjlczyjszd.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJnamlqZGFwZ216amxjenlqc3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMTY3NDYsImV4cCI6MjA4OTU5Mjc0Nn0.XCGYtyIEabVvpDwYlox_lDYx3TMevnLN5q0wQ097p4E';
+const SUPA_URL = 'https://dfaqybjemlmkktfornmu.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmYXF5YmplbWxta2t0Zm9ybm11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NTEzNjAsImV4cCI6MjA5MDAyNzM2MH0.Qpin4AX524kWpsp_s7tPFWrvFANeh6FbgwR7O5bzhTQ';
 
 // ── Supabase API ──
 async function supa(method, table, opts = {}) {
@@ -105,18 +105,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ═══════════════ AUTH SCREEN (zorunlu giriş) ═══════════════
 function showAuthScreen() {
-  // Tüm sayfaları gizle
   document.querySelectorAll('.pg').forEach(p => p.classList.remove('active'));
   document.getElementById('back-btn').classList.remove('show');
-
   const overlay = document.getElementById('auth-overlay');
   overlay.style.display = 'flex';
   overlay.style.flexDirection = 'column';
+  document.body.style.cursor = 'auto';
   showAuthForm('login');
 }
 
 function hideAuthScreen() {
   document.getElementById('auth-overlay').style.display = 'none';
+  document.body.style.cursor = 'none';
 }
 
 function showAuthForm(type) {
