@@ -10,14 +10,12 @@
 </head>
 <body>
 
-<!-- Auth Overlay (zorunlu giriş ekranı) -->
-<div id="auth-overlay">
-  <div id="auth-box"></div>
-</div>
-
 <!-- Navbar -->
 <nav id="navbar">
   <div class="nav-logo" onclick="goTo('home')">DARK<span>VEXX</span></div>
+  <div class="nav-center">
+    <span id="darkguard-status">🛡️ DarkGuard V.1 — BEKLEMEDE</span>
+  </div>
   <div class="nav-right">
     <button class="nb" onclick="goTo('home')">Ana Sayfa</button>
     <button class="nb" onclick="goTo('channels')">Kanallar</button>
@@ -28,7 +26,7 @@
 <!-- Back Button -->
 <button id="back-btn" onclick="goBack()">← Geri</button>
 
-<!-- ── HOME ── -->
+<!-- HOME -->
 <section class="pg active" id="pg-home">
   <div class="hero-wrap">
     <div class="grid-bg"></div>
@@ -36,8 +34,8 @@
       <div class="hero-badge">YouTube Kanal Platformu</div>
       <h1 class="hero-title"><span id="glitch-text" data-text="DARK VEXX">DARK VEXX</span></h1>
       <p class="hero-desc">Kanalını paylaş, topluluğu keşfet.</p>
-      <div class="hero-actions">
-        <button class="btn-neon" onclick="goTo('add')">➕ Kanalını Ekle</button>
+      <div class="hero-actions" id="hero-actions">
+        <button class="btn-neon" onclick="currentUser?goTo('add'):openModal('register')">➕ Kanalını Ekle</button>
         <button class="btn-outline" onclick="goTo('channels')">🔍 Kanalları Keşfet</button>
       </div>
     </div>
@@ -45,14 +43,17 @@
   </div>
 </section>
 
-<!-- ── ADD CHANNEL ── -->
+<!-- ADD CHANNEL -->
 <section class="pg" id="pg-add">
   <div class="page-wrap">
     <h2 class="pg-title">Kanalını Ekle</h2>
     <div class="form-card">
       <div class="field">
-        <label>YouTube Kanal Linki</label>
-        <input id="inp-url" type="text" placeholder="https://youtube.com/@kanalin" autocomplete="off"/>
+        <label>YouTube Kanal Kullanıcı Adı</label>
+        <div class="url-input-wrap">
+          <span class="url-prefix">youtube.com/@</span>
+          <input id="inp-handle" type="text" placeholder="kanaladim" autocomplete="off"/>
+        </div>
       </div>
       <div class="field">
         <label>Kategoriler <small>(en fazla 3)</small></label>
@@ -64,7 +65,7 @@
   </div>
 </section>
 
-<!-- ── CHANNELS ── -->
+<!-- CHANNELS -->
 <section class="pg" id="pg-channels">
   <div class="page-wrap">
     <h2 class="pg-title">Kanalları Keşfet</h2>
@@ -73,19 +74,28 @@
   </div>
 </section>
 
-<!-- ── ADMIN ── -->
+<!-- ADMIN -->
 <section class="pg" id="pg-admin">
   <div class="page-wrap">
     <h2 class="pg-title">⚙️ Admin Paneli</h2>
     <div id="admin-stats" class="stat-row"></div>
+    <div id="admin-action-btns" class="admin-btns"></div>
+
     <h3 class="sec-title">Kanallar</h3>
     <div id="admin-ch-list"></div>
+
+    <h3 class="sec-title">Kullanıcılar</h3>
+    <div id="admin-user-list"></div>
+
     <h3 class="sec-title">Yasaklı Kullanıcılar</h3>
     <div id="admin-ban-list"></div>
+
+    <h3 class="sec-title">🛡️ DarkGuard — Şüpheli Aktiviteler</h3>
+    <div id="suspicious-log"></div>
   </div>
 </section>
 
-<!-- ── MODAL ── -->
+<!-- MODAL -->
 <div id="modal-bg" onclick="closeModal()">
   <div id="modal-box" onclick="event.stopPropagation()">
     <button class="modal-x" onclick="closeModal()">✕</button>
@@ -93,7 +103,7 @@
   </div>
 </div>
 
-<!-- ── CHAT ── -->
+<!-- CHAT -->
 <div id="chat-wrap">
   <div id="chat-head" onclick="toggleChat()">
     <span>💬 Sohbet</span>
@@ -101,16 +111,16 @@
   </div>
   <div id="chat-body">
     <div id="chat-auth-wall">
-      <p>Sohbete katılmak için giriş yap veya kayıt ol.</p>
+      <p>Sohbete katılmak için kayıt ol veya giriş yap.</p>
       <div class="chat-auth-row">
-        <button class="btn-neon sm" onclick="openModal('login')">Giriş Yap</button>
-        <button class="btn-outline sm" onclick="openModal('register')">Kayıt Ol</button>
+        <button class="btn-neon sm" onclick="openModal('register')">Kayıt Ol</button>
+        <button class="btn-outline sm" onclick="openModal('login')">Giriş Yap</button>
       </div>
     </div>
     <div id="chat-inner" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
       <div id="chat-userbar">
         <span id="chat-uname"></span>
-        <button class="chat-exit-btn" onclick="chatLogout()">Çıkış</button>
+        <button class="chat-exit-btn" onclick="doLogout()">Çıkış</button>
       </div>
       <div id="chat-msgs"></div>
       <div id="chat-inputs">
@@ -126,7 +136,7 @@
 
 <script src="app.js"></script>
 
-<!-- Custom Cursor - en son ekleniyor, her şeyin üstünde -->
+<!-- Cursor - en sonda olmalı -->
 <div id="cur-dot"></div>
 <div id="cur-ring"></div>
 </body>
