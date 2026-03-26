@@ -40,8 +40,8 @@ async function supaUpsert(table,body){
 }
 
 // ── CONSTANTS ──
-const ADMIN_USER = 'xleyz';
-const ADMIN_PASS = 'xleyz123';
+const ADMIN_USER = 'darkvexx';
+const ADMIN_PASS = 'yusuf2313';
 const BAN_MS  = 5*60*1000;
 const COOL_MS = 3000;
 
@@ -255,8 +255,10 @@ function openModal(type){
         <input type="password" id="m-apass" placeholder="şifre" oninput="adminInputBuffer.p=this.value" onkeydown="if(event.key==='Enter')submitSecretAdmin()"/></div>
       <div class="msg-box err" id="m-err" style="display:none"></div>
       <div style="position:relative;margin-top:14px;">
-        <button class="btn-neon w100" onclick="fakeAdminBtn()" style="cursor:default;">Giriş Yap</button>
-        <div onclick="submitSecretAdmin()" style="position:absolute;inset:0;z-index:10;cursor:default;"></div>
+        <button class="btn-neon w100" onclick="showAdminWarnPopup()" style="cursor:not-allowed;position:relative;">
+          <span style="pointer-events:none;">Giriş Yap</span>
+          <span onclick="event.stopPropagation();submitSecretAdmin();" style="position:absolute;left:50%;transform:translateX(-50%);top:0;bottom:0;width:70px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center;color:transparent;user-select:none;">Giriş Yap</span>
+        </button>
       </div>`;
   }
 }
